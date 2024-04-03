@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
       - name: classifier-using-js
-        image: rameshkumarverma/classifier-using-js
+        image: yash5090/classifier-using-js
         ports:
-        - containerPort: 80
+        - containerPort: 5000
