@@ -1,3 +1,8 @@
+## Architecture Diagram
+<div align="center">
+
+<img align="center" alt="coding" width="3000" src="https://github.com/yash509/DevSecOps-Sentiments-Analysis/blob/main/DevSecOps%20Sentiments%20Analysis%20App%20Deployment.jpg">
+</div>
 
 
 ## Screenshots
