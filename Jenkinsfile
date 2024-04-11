@@ -222,7 +222,7 @@ pipeline {
         stage('Deploy to Docker Container'){
             steps{
                 //dir('BMI Calculator (JS)') {
-                    sh 'docker run -d --name classifier-using-js -p 5000:5000 yash5090/classifier-using-js:latest' 
+                    sh 'docker run -d --name classifier-using-js -p 5000:80 yash5090/classifier-using-js:latest' 
                 //}
             }
         }
