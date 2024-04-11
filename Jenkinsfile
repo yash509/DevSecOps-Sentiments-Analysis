@@ -1,110 +1,301 @@
-pipeline{
+pipeline {
     agent any
-    // tools{
-    //     jdk 'jdk17'
-    //     nodejs 'node16'
-    // }
+    tools {
+        jdk 'jdk17'
+        nodejs 'node16'
+    }
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+        SCANNER_HOME = tool 'sonar-scanner'
     }
     stages {
-        stage('clean workspace'){
-            steps{
+        stage('clean workspace') {
+            steps {
                 cleanWs()
             }
         }
-        stage('Checkout from Git'){
-            steps{
-                git branch: 'main', url: 'https://github.com/rameshkumarvermagithub/Web-dev-projects.git'
-            }
-        }
-        stage("Sonarqube Analysis "){
-            steps{
-              dir('Classifier-Using-JS') {
-                withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=classifier-using-js \
-                    -Dsonar.projectKey=classifier-using-js'''
-                }
-              }
-            }
-        }
-        stage("quality gate"){
-           steps {
-                script {
-                  dir('Classifier-Using-JS') {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar'
-                }
-                }
-            }
-        }
-        // stage('Install Dependencies') {
-        //     steps {
-        //         sh "npm install"
-        //     }
-        // }
-        stage('OWASP FS SCAN') {
+        stage('Unit Tests') {
             steps {
-              dir('Classifier-Using-JS') {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-            }
+                sh 'jenkins --version'
+                sh 'aws --version'
+                sh 'kubectl version --client'
+                sh 'terraform --version'
+                sh 'trivy --version'
+                sh 'docker --version'
             }
         }
-         stage('TRIVY FS SCAN') {
+        stage('Checkout from Git') {                        
+            steps {                                       
+                git branch: 'main', url: 'https://github.com/yash509/DevSecOps-Sentiments-Analysis.git'
+            }
+        }
+        stage('Deployments') {
+            parallel {
+                stage('Test deploy to staging') {
+                    steps {
+                        echo 'staging deployment done'
+                    }
+                }
+                stage('Test deploy to production') {
+                    steps {
+                        echo 'production deployment done'
+                    }
+                }
+            }
+        }
+        stage('Test Build') {
             steps {
-              dir('Classifier-Using-JS') {
-                sh "trivy fs . > trivyfs.txt"
+                echo 'Building....'
             }
+            post {
+                always {
+                    jiraSendBuildInfo site: 'clouddevopshunter.atlassian.net'
+                }
             }
         }
-        stage("Docker Build & Push"){
+        stage('Deploy to Staging') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo 'Deploying to Staging from main....'
+            }
+            post {
+                always {
+                    jiraSendDeploymentInfo environmentId: 'us-stg-1', environmentName: 'us-stg-1', environmentType: 'staging'
+                }
+            }
+        }
+        stage('Deploy to Production') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo 'Deploying to Production from main....'
+            }
+            post {
+                always {
+                    jiraSendDeploymentInfo environmentId: 'us-prod-1', environmentName: 'us-prod-1', environmentType: 'production'
+                }
+            }
+        }
+        stage("Sonarqube Analysis ") {                         
+            steps {
+                //dir('Band Website') {
+                    withSonarQubeEnv('sonar-server') {
+                    sh '''$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=sentiments-analyzer-application \
+                    -Dsonar.projectKey=sentiments-analyzer-application'''
+                    //}
+                }
+            }
+        }
+        stage("quality gate") {
+            steps {
+                //dir('Band Website') {
+                    script {
+                        waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
+                    //}
+                }
+            }
+        }
+        stage('Install Dependencies') {
+            steps {
+                //dir('Band Website') {
+                    sh "npm install"
+                //}
+            }
+        }
+        stage('OWASP File System SCAN') {
+            steps {
+                //dir('Band Website') {
+                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                //}
+            }
+        }
+        stage('TRIVY File System SCAN') {
+            steps {
+                //dir('Band Website') {
+                    sh "trivy fs . > trivyfs.txt"
+                //}
+            }
+        }
+        stage('Docker Scout Image Overview') {
+            steps {
+                script{
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
+                       sh 'docker-scout quickview fs://.'
+                   }
+                }   
+            }
+        }
+        stage('Docker Scout CVES File System Scan') {
+            steps {
+                script{
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
+                       sh 'docker-scout cves fs://.'
+                   }
+                }   
+            }
+        }
+        stage("Docker Image Building"){
             steps{
                 script{
-                  dir('Classifier-Using-JS') {
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
-                       sh "docker build -t rameshkumarverma/classifier-using-js ."
-                       // sh "docker tag classifier-using-js rameshkumarverma/classifier-using-js:latest"
-                       sh "docker push rameshkumarverma/classifier-using-js:latest"
+                    //dir('Band Website') {
+                        withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
+                            sh "docker build -t classifier-using-js ." 
+                            
+                        //}
                     }
-                  }
                 }
+            }
+        }
+        stage("Docker Image Tagging"){
+            steps{
+                script{
+                    //dir('Band Website') {
+                        withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
+                            sh "docker tag classifier-using-js yash5090/classifier-using-js:latest " 
+                        //}
+                    }
+                }
+            }
+        }
+        stage('Docker Image Scanning') { 
+            steps { 
+                sh "trivy image --format table -o trivy-image-report.html yash5090/classifier-using-js:latest" 
+            } 
+        } 
+        stage("Image Push to DockerHub") {
+            steps{
+                script{
+                    //dir('Band Website') {
+                        withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                            sh "docker push yash5090/classifier-using-js:latest "
+                        //}
+                    }
+                }
+            }
+        }
+        stage('Docker Scout Image Scanning') {
+            steps {
+                script{
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
+                       sh 'docker-scout quickview yash5090/classifier-using-js:latest'
+                       sh 'docker-scout cves yash5090/classifier-using-js:latest'
+                       sh 'docker-scout recommendations yash5090/classifier-using-js:latest'
+                   }
+                }   
             }
         }
         stage("TRIVY"){
             steps{
-              dir('Classifier-Using-JS') {
-                sh "trivy image rameshkumarverma/classifier-using-js:latest > trivyimage.txt"
-            }
+                //dir('Band Website') {
+                    sh "trivy image yash5090/classifier-using-js:latest > trivyimage.txt"   
+                //}
             }
         }
-        stage("deploy_docker"){
+        stage ('Manual Approval'){
+          steps {
+           script {
+             timeout(time: 10, unit: 'MINUTES') {
+              approvalMailContent = """
+              Project: ${env.JOB_NAME}
+              Build Number: ${env.BUILD_NUMBER}
+              Go to build URL and approve the deployment request.
+              URL de build: ${env.BUILD_URL}
+              """
+             mail(
+             to: 'clouddevopshunter@gmail.com',
+             subject: "${currentBuild.result} CI: Project name -> ${env.JOB_NAME}", 
+             body: approvalMailContent,
+             mimeType: 'text/plain'
+             )
+            input(
+            id: "DeployGate",
+            message: "Deploy ${params.project_name}?",
+            submitter: "approver",
+            parameters: [choice(name: 'action', choices: ['Deploy'], description: 'Approve deployment')])  
+            }
+           }
+          }
+        }
+        stage('Deploy to Docker Container'){
             steps{
-              dir('Classifier-Using-JS') {
-                sh "docker stop classifier-using-js || true"  // Stop the container if it's running, ignore errors
-                sh "docker rm classifier-using-js || true" 
-                sh "docker run -d --name classifier-using-js -p 8080:80 rameshkumarverma/classifier-using-js"
-            }
+                //dir('BMI Calculator (JS)') {
+                    sh 'docker run -d --name classifier-using-js -p 5000:5000 yash5090/classifier-using-js:latest' 
+                //}
             }
         }
-      stage('Deploy to Kubernetes') {
-            steps {
-                script {
-                    dir('Classifier-Using-JS') {
+        stage('Deploy to Kubernetes'){
+            steps{
+                script{
+                    //dir('K8S') {
                         withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                            // Apply deployment and service YAML files
-                            sh 'kubectl apply -f deployment.yml'
-                            sh 'kubectl apply -f service.yml'
-
-                            // Get the external IP or hostname of the service
-                            // def externalIP = sh(script: 'kubectl get svc amazon-service -o jsonpath="{.status.loadBalancer.ingress[0].hostname}"', returnStdout: true).trim()
-
-                            // Print the URL in the Jenkins build log
-                            // echo "Service URL: http://${externalIP}/"
-                        }
+                                sh 'kubectl apply -f deployment.yaml'
+                                sh 'kubectl apply -f service.yaml'
+                        //}
                     }
                 }
             }
         }
-
+         stage('Verify the Kubernetes Deployments') { 
+            steps { 
+                withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') { 
+                    sh "kubectl get all "
+                    sh "kubectl get pods " 
+                    sh "kubectl get svc "
+                    sh "kubectl get ns"
+                } 
+            } 
+        } 
+        stage('Deployment Done') {
+            steps {
+                echo 'Deployed Succcessfully...'
+            }
+        }
+    }
+    post { 
+        always {
+            script { 
+                def jobName = env.JOB_NAME 
+                def buildNumber = env.BUILD_NUMBER 
+                def pipelineStatus = currentBuild.result ?: 'UNKNOWN' 
+                def bannerColor = pipelineStatus.toUpperCase() == 'SUCCESS' ? 'green' : 'red' 
+                def body = """ 
+                <html> 
+                <body> 
+                <div style="border: 4px solid ${bannerColor}; padding: 10px;"> 
+                <h2>${jobName} - Build ${buildNumber}</h2> 
+                <div style="background-color: ${bannerColor}; padding: 10px;"> 
+                <h3 style="color: white;">Pipeline Status: ${pipelineStatus.toUpperCase()}</h3> 
+                </div> 
+                <p>Check the <a href="${BUILD_URL}">console output</a>.</p> 
+                </div> 
+                </body> 
+                </html> 
+            """ 
+ 
+            emailext (
+                attachLog: true,
+                subject: "${jobName} - Build ${buildNumber} - ${pipelineStatus.toUpperCase()}", 
+                body: body, 
+                to: 'clouddevopshunter@gmail.com', 
+                from: 'jenkins@example.com', 
+                replyTo: 'jenkins@example.com', 
+                mimeType: 'text/html', 
+                attachmentsPattern: 'trivy-image-report.html, trivyfs.txt, trivyimage.txt') 
+            } 
+        } 
     }
 }
+stage('Result') {
+        timeout(time: 10, unit: 'MINUTES') {
+            mail to: 'clouddevopshunter@gmail.com',
+            subject: "${currentBuild.result} CI: ${env.JOB_NAME}",
+            body: "Project: ${env.JOB_NAME}\nBuild Number: ${env.BUILD_NUMBER}\nGo to ${env.BUILD_URL} and approve deployment"
+            input message: "Deploy ${params.project_name}?", 
+            id: "DeployGate", 
+            submitter: "approver", 
+            parameters: [choice(name: 'action', choices: ['Success'], description: 'Approve deployment')]
+        }
+    }
